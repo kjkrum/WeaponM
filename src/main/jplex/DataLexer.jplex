@@ -1,0 +1,327 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<LexerSpec>
+	<Package>krum.weaponm.database.lexer</Package>
+	<Prefix>Data</Prefix>
+	<StateListener>true</StateListener>
+	<Loggers>true</Loggers>
+	<ResourcePath>resources/weaponm/automatons/data</ResourcePath>
+	<PublicStateChangeMethods>true</PublicStateChangeMethods>
+	
+	<State name="UNKNOWN"/>
+	<State name="TWGS"/>
+	<State name="CORRECT_GAME"/>
+	<State name="WRONG_GAME"/>
+	<State name="GAME_STATS"/>
+	<State name="MAJOR_PROMPT"/>
+	<State name="AVOIDS_LIST"/>
+	<State name="QUICK_STATS"/>
+	
+	<InitialState>UNKNOWN</InitialState>
+	
+	<!-- new line sequence - including non-standard twgs versions -->
+	<Macro name="NL" expr="(&#13;(&#27;\[0m)?&#10;|&#10;&#13;)"/>
+	<!-- line delimiter character - use to simulate $ and ^ operators -->
+	<Macro name="LD" expr="(&#13;|&#10;)"/>
+	<!-- time left - appears in several prompts -->
+	<Macro name="TL" expr="([0-9]{2}:[0-9]{2}:[0-9]{2})"/>
+	<!-- characters displayed in messages and accepted as input -->
+	<Macro name="PRINTABLE" expr="([&#32;-&#125;])"/>
+	<!-- used where ansi is variable, such as within ship and planet type names -->
+	<Macro name="ANSI" expr="(&#27;\[[;0-9]+[A-Za-z])"/>
+	<Macro name="NAME" expr="({PRINTABLE}+)"/>
+	<Macro name="TYPE_NAME" expr="(({PRINTABLE}|{ANSI})+)"/>
+	<!-- number formats -->
+	<Macro name="SECTOR" expr="([1-9][0-9]*)"/> <!-- non-negative, non-zero -->
+	<Macro name="NN_INTEGER" expr="(0|[1-9][0-9]*)"/> <!-- non-negative integer -->
+	<Macro name="INTEGER" expr="(0|-?[1-9][0-9]*)"/>
+	<Macro name="DECIMAL" expr="(-?(0|[1-9][0-9]*)\.[0-9]+)"/>
+	<Macro name="PERCENT" expr="((0|[1-9][0-9]?|100)%)"/>
+	<Macro name="THOUSANDS" expr="(0|-?[1-9][0-9]{0,2}(,[0-9]{3})*)"/> <!-- thousands-separated integer -->
+	<!-- may contain backspace sequences; may be zero length -->
+	<Macro name="NUMERIC_INPUT" expr="([0-9 &#8;]*)"/>
+	
+	<RuleGroup>
+		<State name="UNKNOWN"/>
+		<Rule expr="Telnet connection detected\.">
+			<JumpState name="TWGS"/>
+		</Rule>
+	</RuleGroup>
+	
+	<RuleGroup>
+		<State name="TWGS"/>
+		<Rule expr="{LD}Please enter your name" event="namePrompt"/>
+		<!-- parser will set state to CORRECT_GAME or WRONG_GAME -->
+		<Rule expr="[A-PR-Z](&#27;\[(H|2J|0m))*&#27;\[1;36mTrade Wars &#27;\[33m2002 &#27;\[30mWin32 module now loading." event="gameSelected"/>
+	</RuleGroup>
+	
+	<RuleGroup>
+		<State name="CORRECT_GAME"/>
+		<State name="WRONG_GAME"/>
+		<!-- should cover every return to twgs: normal quit, timeout, game crash, etc. -->
+		<Rule expr="{LD}&#27;\[2J(&#27;\[H)?&#27;\[0mTrade(Wars Game Server| Wars 2002 Game Server)">
+			<JumpState name="TWGS"/>
+		</Rule>
+	</RuleGroup>	
+		
+	<RuleGroup>
+		<State name="GAME_STATS"/>
+		<Rule expr="{LD}{PRINTABLE}+={PRINTABLE}+" event="gameStat"/>
+		<!-- parser will put lexer back in CORRECT_GAME or WRONG_GAME -->
+		<Rule expr="{LD}End Stats." event="endStats"/>
+	</RuleGroup>
+		
+	<RuleGroup>
+		<State name="MAJOR_PROMPT"/>
+		<Rule expr="{LD}" event="leavingMajorPrompt">
+			<JumpState name="CORRECT_GAME"/>
+		</Rule>
+	</RuleGroup>
+	
+	<RuleGroup>
+		<State name="AVOIDS_LIST"/>
+		<Rule expr="{LD} +&#27;\[1;32m{SECTOR}( +{SECTOR})*" event="avoidsList"/>
+		<!-- don't consume the whole second NL; leave a LD to match the beginning of whatever's next -->
+		<Rule expr="{NL}{LD}">
+			<JumpState name="CORRECT_GAME"/>
+		</Rule>
+	</RuleGroup>
+	
+	<!-- quick stats are in their own state because they
+	mostly don't contain ANSI and could easily be spoofed -->
+	<RuleGroup>
+		<State name="QUICK_STATS"/>
+		<Rule expr="Sect {SECTOR}" event="quickSector"/>
+		<Rule expr="Turns {THOUSANDS}" event="quickTurns"/>
+		<Rule expr="Creds {THOUSANDS}" event="quickCredits"/>
+		<Rule expr="Figs {THOUSANDS}" event="quickFighters"/>
+		<Rule expr="Shlds {THOUSANDS}" event="quickShields"/>
+		<Rule expr="Hlds {NN_INTEGER}" event="quickHolds"/>
+		<Rule expr="Ore {NN_INTEGER}" event="quickInvOre"/>
+		<Rule expr="Org {NN_INTEGER}" event="quickInvOrg"/>
+		<Rule expr="Equ {NN_INTEGER}" event="quickInvEqu"/>
+		<Rule expr="Col {NN_INTEGER}" event="quickInvCol"/>
+		<Rule expr="Phot {NN_INTEGER}" event="quickPhotons"/>
+		<Rule expr="Armd {NN_INTEGER}" event="quickArmids"/>
+		<Rule expr="Lmpt {NN_INTEGER}" event="quickLimpets"/>
+		<Rule expr="GTorp {NN_INTEGER}" event="quickGenTorps"/>
+		<Rule expr="TWarp {NN_INTEGER}" event="quickTransWarp"/>
+		<Rule expr="Clks {NN_INTEGER}" event="quickCloaks"/>
+		<Rule expr="Beacns {NN_INTEGER}" event="quickBeacons"/>
+		<Rule expr="AtmDt {NN_INTEGER}" event="quickAtomics"/>
+		<Rule expr="Crbo {THOUSANDS}" event="quickCorbomite"/>
+		<Rule expr="EPrb {NN_INTEGER}" event="quickProbes"/>
+		<Rule expr="MDis {NN_INTEGER}" event="quickDisruptors"/>
+		<Rule expr="PsPrb [YN]" event="quickPsyProbe"/>
+		<Rule expr="PlScn [YN]" event="quickPlanetScan"/>
+		<Rule expr="LRS [HDN]" event="quickLongRangeScan"/>
+		<Rule expr="Aln {THOUSANDS}" event="quickAlign"/>
+		<Rule expr="Exp {THOUSANDS}" event="quickXP"/>
+		<Rule expr="Corp {NN_INTEGER}" event="quickCorp"/>
+		<Rule expr="Ship {NN_INTEGER}" event="quickShipNumber">
+			<JumpState name="CORRECT_GAME"/>
+		</Rule>
+	</RuleGroup>
+	
+	 <!-- the main lexer state -->
+	<RuleGroup>
+		<State name="CORRECT_GAME"/>
+		
+		<Rule expr="{LD}Game Stats:">
+			<JumpState name="GAME_STATS"/>
+		</Rule>
+		
+		<!-- major prompts -->
+		<Rule expr="{LD}&#27;\[35mCommand \[&#27;\[1;33mTL&#27;\[0;33m=&#27;\[1m{TL}&#27;\[0;35m\]&#27;\[1;37m:&#27;\[0;35m\[&#27;\[1;36m{SECTOR}" event="commandPrompt">
+			<JumpState name="MAJOR_PROMPT"/>
+		</Rule>
+		<Rule expr="{LD}&#27;\[35mComputer command \[&#27;\[1;33mTL&#27;\[0;33m=&#27;\[1m{TL}&#27;\[0;35m\]&#27;\[1;37m:&#27;\[0;35m\[&#27;\[1;36m{SECTOR}" event="computerPrompt">
+			<JumpState name="MAJOR_PROMPT"/>
+		</Rule>
+		<Rule expr="{LD}&#27;\[35mPlanet command" event="planetPrompt">
+			<JumpState name="MAJOR_PROMPT"/>
+		</Rule>
+		<Rule expr="{LD}&#27;\[35mCitadel command" event="citadelPrompt">
+			<JumpState name="MAJOR_PROMPT"/>
+		</Rule>
+		<!-- note: to match a less-than character, we must use its entity *and* escape it -->
+		<Rule expr="{LD}&#27;\[35m\&lt;&#27;\[33mStarDock" event="stardockPrompt">
+			<JumpState name="MAJOR_PROMPT"/>
+		</Rule>
+		
+		<!-- login stuff -->
+		<Rule expr="&#27;\[35m\[Pause\]" event="pausePrompt"/>
+		<Rule expr="{LD}&#27;\[2J&#27;\[H&#27;\[35mWhat is your name\? " event="namePrompt"/>
+		<Rule expr="{LD}&#27;\[35mPassword\? " event="passwordPrompt"/>
+		<Rule expr="{LD}&#27;\[35mUse ANSI graphics\? " event="ansiPrompt"/>
+		<!-- game menu: match this instead of prompt because prompt can be spoofed -->
+		<Rule expr="&#27;\[36m==&#27;\[1m-&#27;\[0m- &#27;\[1mTrade Wars 2002 &#27;\[0m-&#27;\[1;36m-&#27;\[0;36m==" event="gamePrompt"/>
+		<Rule expr="{LD}&#27;\[2J(&#27;\[H)?&#27;\[32mShow today's log\? " event="showLogPrompt"/>
+		<Rule expr="{LD}&#27;\[35mInclude time/date stamp\?" event="includeTimestampPrompt"/>
+		<Rule expr="{LD}&#27;\[1;5;31mInvalid password." event="invalidPassword"/>
+		<Rule expr="{LD}&#27;\[1;44mWould you like to start a new character in this game\?" event="createTraderPrompt"/>
+		<Rule expr="{LD}&#27;\[1;33mUse &#27;\[0;35m(&#27;\[32mN&#27;\[35m)&#27;\[1;33mew Name or &#27;\[0;35m(&#27;\[32mB&#27;\[35m)&#27;\[1;33mBS Name &#27;\[36m\[B\] &#27;\[33m\? " event="useAliasPrompt"/>
+		<Rule expr="{LD}&#27;\[32mYou must wait for &#27;\[1;33m{NN_INTEGER}" event="deathDelayLockout"/>
+		<!-- this covers tournaments after join date and when you've been blown up too many times -->
+		<Rule expr="{LD}&#27;\[33m(Sorry|I'm sorry)" event="permanentLockout"/>
+		<!-- this is seen in access-restricted games (single player, single corp, time of day, etc.) -->
+		<Rule expr="{LD}&#27;\[1;31m(The game is currently closed\.|Please try back later!)" event="accessModeLockout"/>
+
+		<!-- avoids stuff -->
+		<Rule expr="{LD}&#27;\[35mDo you wish to clear some avoids\?" event="clearAvoidsPrompt"/>
+		<Rule expr="{LD}&#27;\[32mSector &#27;\[1;33m{SECTOR}&#27;\[0;32m will now be avoided" event="avoidSet"/>
+		<Rule expr="{LD}&#27;\[1;36m{SECTOR} &#27;\[0;32m has been cleared" event="avoidCleared"/>
+		<Rule expr="{LD}&#27;\[32mAvoided sectors Cleared." event="allAvoidsCleared"/>
+		<Rule expr="{LD}&#27;\[1;44m\&lt;(List Avoided Sectors|Scanning for Hazardous Sectors you have marked to Avoid)>{NL}{LD}">
+			<JumpState name="AVOIDS_LIST"/>
+		</Rule>
+		
+		<!-- cim stuff -->
+		<Rule expr="{LD}: " event="cimPrompt"/>
+		<!-- putting this comment here prevents a really strange bug. -->
+		<!-- http://www.java-forums.org/xml/66627-attribute-being-replaced-im-completely-mystified.html -->
+		<Rule expr="{LD}(\(?{SECTOR}\)? \&gt;{NL}? )+\(?{SECTOR}\)?" event="cimCoursePlot"/>
+		<Rule expr="{LD} *{SECTOR}( +{SECTOR})*" event="cimSectorInfo"/>
+		<Rule expr="{LD} *{SECTOR}( -? *{NN_INTEGER} +{PERCENT}){3}" event="cimPortInfo"/>
+
+		<!-- density scan -->
+		<Rule expr="{LD}&#27;\[32mSector ( |&#27;\[35m\()&#27;\[1;3[16]m *{SECTOR}( |&#27;\[0;35m\)) &#27;\[(0;)?32m==> &#27;\[35m *{NN_INTEGER}&#27;\[32m  Warps&#27;\[1;36m : &#27;\[33m{NN_INTEGER}&#27;\[0;32m    NavHaz&#27;\[1;36m : &#27;\[0;35m( &#27;\[1;5;31m)? +{PERCENT}&#27;\[0m&#27;\[32m    Anom&#27;\[1;36m : (Y|&#27;\[33mN)" event="densityScan"/>
+		
+		<!-- probe stuff -->
+		<Rule expr="{LD}&#27;\[33mProbe entering sector &#27;\[1m: &#27;\[36m{SECTOR};" event="probeEnteringSector"/>
+		<Rule expr="{LD}&#27;\[1;36mProbe Self Destructs" event="probeSelfDestructs"/>
+		<Rule expr="{LD}&#27;\[1;5;31mProbe Destroyed!" event="probeDestroyed"/>
+		
+		<!-- sector display -->
+		<Rule expr="{LD}&#27;\[1;32mSector  &#27;\[33m: &#27;\[36m{SECTOR}" event="sectorHeader"/>
+		<Rule expr="&#27;\[0;32min &#27;\[1m{NAME}" event="nebulaName"/>
+		<Rule expr="{LD}&#27;\[35mPorts   &#27;\[1;33m: &#27;\[36m{NAME}&#27;\[33m, &#27;\[0;35mClass &#27;\[1;36m{NN_INTEGER}" event="sectorPort"/>
+		<Rule expr="{LD}&#27;\[1;33m           \(Under Construction - {NN_INTEGER} days left\)" event="portStatusUnderConstruction"/>
+		<Rule expr="{LD}&#27;\[35mPorts   &#27;\[1;33m: &#27;\[5;31m \&lt;=-DANGER" event="portStatusDestroyed"/>
+		<Rule expr="{LD}&#27;\[1;32mWarps to Sector\(s\) &#27;\[33m: +((&#27;\[(0;)?35m\(&#27;\[1;31m{SECTOR}&#27;\[0;35m\)|&#27;\[(1;)?36m ?{SECTOR})(&#27;\[(0;)?32m - )?)*" event="sectorWarps"/>
+		<!-- fighters -->
+		<Rule expr="{LD}&#27;\[35mFighters&#27;\[1;33m: &#27;\[36m{THOUSANDS} &#27;\[0;35m\(yours\) &#27;\[33m\[[DOT]" event="sectorFightersYours"/>
+		<Rule expr="{LD}&#27;\[35mFighters&#27;\[1;33m: &#27;\[36m{THOUSANDS} &#27;\[0;35m\(belong to your Corp\) &#27;\[33m\[[DOT]" event="sectorFightersYourCorp"/>
+		<Rule expr="{LD}&#27;\[35mFighters&#27;\[1;33m: &#27;\[36m{THOUSANDS} &#27;\[0;35m\(belong to Corp#{NN_INTEGER}, {NAME}\) &#27;\[33m\[[DOT]" event="sectorFightersCorp"/>
+		<!-- lower pri because "{NAME}" includes "Corp#{NN_INTEGER}, {NAME}" -->
+		<Rule expr="{LD}&#27;\[35mFighters&#27;\[1;33m: &#27;\[36m{THOUSANDS} &#27;\[0;35m\(belong to {NAME}\) &#27;\[33m\[[DOT]" event="sectorFightersOther" pri="1"/>
+		<Rule expr="{LD}&#27;\[35mFighters&#27;\[1;33m: &#27;\[36m{THOUSANDS} &#27;\[33m\(&#27;\[34mSpace Pirates&#27;\[33m\) &#27;\[0;33m\[[DOT]" event="sectorFightersPirate"/>
+		
+		<!-- port stuff -->
+		<Rule expr="{LD}&#27;\[1;44m\&lt;Negotiate" event="planetTrading"/>
+		<Rule expr="{LD}&#27;\[1;44m\&lt;Port" event="shipTrading"/>
+		<Rule expr="{LD}&#27;\[1;5;31mDocking\.\.\." event="portInCurrentSector"/>
+		<Rule expr="{LD}&#27;\[35mWhat sector is the port in\? &#27;\[1;33m\[{SECTOR}\] {NUMERIC_INPUT}" event="portInArbitrarySector"/>
+		<Rule expr="{LD}&#27;\[1;33mCommerce report for &#27;\[36m{NAME}" event="portReportHeader"/>
+		<Rule expr="{LD}&#27;\[1;36m(Fuel Ore |Organics |Equipment)&#27;\[0;32m  (Selling|Buying ) &#27;\[1;36m +{NN_INTEGER}&#27;\[0;32m +{NN_INTEGER}" event="portReport"/>
+
+		<!-- trading -->
+		<!-- this same credits message appears in several other places -->
+		<Rule expr="{LD}&#27;\[32mYou have &#27;\[1;(33|36)m{THOUSANDS}&#27;\[0;32m credits" event="credits"/>
+		<Rule expr="{LD}&#27;\[35mHow many (holds|units) of &#27;\[1;36m(Fuel Ore|Organics|Equipment)&#27;\[0;35m do you want to (buy|sell)" event="tradeInitPrompt"/>
+		<Rule expr="{LD}&#27;\[1;36mAgreed, &#27;\[33m{THOUSANDS}" event="tradeUnits"/>
+		<Rule expr="{LD}&#27;\[32mOur final offer" event="finalOffer"/>
+		<Rule expr="{LD}&#27;\[35mYour offer \[&#27;\[1;33m{THOUSANDS}" event="tradeOfferPrompt"/>
+		<Rule expr="{LD}&#27;\[33m\&lt;P-Probe estimates your offer was &#27;\[1m ?{DECIMAL}" event="psyProbeReport"/>
+		<!-- purple curses indicate completed sell -->
+		<Rule expr="{LD}&#27;\[35m(Done|FINE|Agreed|Very well|Oh well|If only|You (insult|are (a rogue|robbing me)))" event="tradeAccepted"/>
+		<!-- green curses indicate completed buy -->
+		<Rule expr="{LD}&#27;\[32m(I (hate|PAID|could)|SOLD|Cheapskate|\(Sigh\)|Agreed|Very well|You (are a shrewd|will put))" event="tradeAccepted"/>
+		<!-- bright yellow curses indicate you were kicked off the port -->
+		<Rule expr="{LD}&#27;\[1;33m(Get lost|HA!|Swine|I (see|think))" event="tradeRejected"/>
+		<!-- if you offer to sell something for 0 credits, port will thank you and take it -->
+		<Rule expr="{LD}&#27;\[1;44mThank you" event="tradeAccepted"/>
+		<!-- if you try to buy something for 0 credits, port will tell you nothing is free -->
+		<Rule expr="{LD}&#27;\[1;44mNothing" event="tradeRejected"/>
+		<!--  there are also cyan curses when the port takes your offer as a joke, but they just cause the last offer prompt to repeat -->
+		
+		<!-- red stuff -->
+		<Rule expr="{LD}&#27;\[1;36mThe Trade Journals estimate this port has in excess of &#27;\[33m{NN_INTEGER}" event="portCredits"/>
+		
+		<!-- log stuff -->
+		
+		<!-- no {LD} here because it's preceded by a bare CR that's likely been consumed by leavingMajorPrompt -->               
+		<Rule expr="&#27;\[K(&#27;\[1A)?&#27;\[1;31mINACTIVITY" event="inactivityWarning"/>
+	
+		<!-- comms -->
+		<Rule expr="&#27;\[K&#27;\[(1A&#27;\[)?3[236]m[FRP] &#27;\[1(;36)?m{NAME}&#27;\[33m{PRINTABLE}+" event="commCompact"/>
+		<Rule expr="{LD}&#27;\[32mIncoming transmission from &#27;\[1;36m{NAME}&#27;\[0;32m( on (Federation comm-link|channel &#27;\[1;36m0&#27;\[0;32m))?:&#13;&#27;\[0m&#10;(&#7;&#7;)?&#27;\[1;33m{PRINTABLE}+" event="commLong"/>
+		<!-- <Rule expr="&#27;\[1;36m{PRINTABLE}&#27;\[0;32m is hailing you!"/> -->
+		<Rule expr="(&#27;\[K&#27;\[1A)?&#27;\[1;36m{NAME}&#27;\[0;32m is hailing you!" event="hailHeader"/>
+
+		<!-- trader listings -->
+	
+		<!-- info screen -->
+		<Rule expr="{LD}&#27;\[35mTrader Name    &#27;\[1;33m: &#27;\[0;32m{NAME}" event="infoTraderName"/>
+		<Rule expr="{LD}&#27;\[35mRank and Exp   &#27;\[1;33m: &#27;\[36m{THOUSANDS}&#27;\[0;32m points&#27;\[1;33m,&#27;\[0;32m Alignment&#27;\[1;33m=&#27;\[36m{THOUSANDS}" event="infoXpAlign"/>
+		<Rule expr="{LD}&#27;\[35mTimes Blown Up &#27;\[1;33m: &#27;\[0;32m{NN_INTEGER}" event="infoTimesBlownUp"/>
+		<Rule expr="{LD}&#27;\[35mCorp           &#27;\[1;33m\# &#27;\[0;32m{NN_INTEGER}&#27;\[1;33m, &#27;\[0;32m{NAME}" event="infoCorp"/>
+		<Rule expr="{LD}&#27;\[35mShip Name      &#27;\[1;33m: &#27;\[0;32m{NAME}" event="infoShipName"/>
+		<!-- ship manufacturer and type name are run together with an ansi reset in between -->
+		<Rule expr="{LD}&#27;\[35mShip Info      &#27;\[1;33m: &#27;\[0;32m{TYPE_NAME}" event="infoShipType"/>
+		<Rule expr="{LD}&#27;\[35mDate Built     &#27;\[1;33m: &#27;\[0;32m{PRINTABLE}+" event="infoShipDate"/>
+		<Rule expr="{LD}&#27;\[35mTurns to Warp  &#27;\[37m&#27;\[35m&#27;\[1;33m: &#27;\[0;32m{NN_INTEGER}" event="infoTPW"/>
+		<!-- sector is redundant - info screen always invoked from command prompt -->
+		<!-- <Rule expr="{LD}&#27;\[35mCurrent Sector &#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoSector"/> -->
+		<Rule expr="{LD}&#27;\[35mTractor Beam   &#27;\[1;33m: &#27;\[36mON, towing (\(ship\))? {NAME}" event="infoTractor"/>
+		<Rule expr="{LD}&#27;\[35mTurns left     &#27;\[1;33m: &#27;\[(5;31|36)m{NN_INTEGER}" event="infoTurns"/>
+		<Rule expr="{LD}&#27;\[35mTotal Holds    &#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoHolds"/>
+		<Rule expr="Fuel Ore&#27;\[1;33m=&#27;\[36m{NN_INTEGER}" event="infoInvOre"/>
+		<Rule expr="Organics&#27;\[1;33m=&#27;\[36m{NN_INTEGER}" event="infoInvOrg"/>
+		<Rule expr="Equipment&#27;\[1;33m=&#27;\[36m{NN_INTEGER}" event="infoInvEqu"/>
+		<Rule expr="Colonists&#27;\[1;33m=&#27;\[36m{NN_INTEGER}" event="infoInvColos"/>
+		<Rule expr="{LD}&#27;\[35mFighters       &#27;\[1;33m: &#27;\[(5;31|36)m{THOUSANDS}" event="infoFighters"/>
+		<Rule expr="{LD}&#27;\[35mShield points  &#27;\[1;33m: &#27;\[36m{THOUSANDS}" event="infoShields"/>
+		<!-- Some of these items may be in a second column when a ship is loaded with stuff.
+		I'm not sure which ones are candidates for this, so I'm treating them all the same.
+		Items in the second column have attributes 0;35 instead of just 35. I also don't know
+		why some of these strings contain the pointless "&#27;\[37m&#27;\[35m" sequence, but
+		at least it always seems to appear in the same place. -->
+		<Rule expr="&#27;\[(0;)?35mArmid Mines &#27;\[37m&#27;\[35m T1&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoArmids"/>
+		<Rule expr="&#27;\[(0;)?35mLimpet Mines T2&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoLimpets"/>
+		<Rule expr="&#27;\[(0;)?35mMarker Beacons &#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoBeacons"/>
+		<Rule expr="&#27;\[(0;)?35mPhoton Missiles&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoPhotons"/>
+		<Rule expr="&#27;\[(0;)?35mGenesis Torps  &#27;\[37m&#27;\[35m&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoGenTorps"/>
+		<Rule expr="&#27;\[(0;)?35mAtomic Detn\.   &#27;\[37m&#27;\[35m&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoAtomics"/>
+		<Rule expr="&#27;\[(0;)?35mCorbomite Level&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoCorbomite"/>
+		<Rule expr="&#27;\[(0;)?35mCloaking Device&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoCloaks"/>
+		<Rule expr="&#27;\[(0;)?35mEther Probes   &#27;\[37m&#27;\[35m&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoProbes"/>
+		<Rule expr="&#27;\[(0;)?35mMine Disruptors&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoDisruptors"/>
+		<Rule expr="&#27;\[(0;)?35mPsychic Probe  &#27;\[1;33m: &#27;\[36mYes" event="infoPsyProbe"/>
+		<Rule expr="&#27;\[(0;)?35mPlanet Scanner &#27;\[1;33m: &#27;\[36mYes" event="infoPlanetScanner"/>
+		<Rule expr="&#27;\[(0;)?35mLongRange Scan &#27;\[1;33m: &#27;\[36m[HD]" event="infoLongRangeScanner"/>
+		<Rule expr="&#27;\[(0;)?35m  \(Type 1 Jump\)&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoTW1Range"/>
+		<Rule expr="&#27;\[(0;)?35m  \(Type 2 Jump\)&#27;\[1;33m: &#27;\[36m{NN_INTEGER}" event="infoTW2Range"/>
+		<Rule expr="&#27;\[(0;)?35mInterdictor ON &#27;\[37m&#27;\[35m&#27;\[1;33m: &#27;\[3[16]m[YN]" event="infoInterdictOn"/>
+		<Rule expr="{LD}&#27;\[35mCredits        &#27;\[37m&#27;\[35m&#27;\[1;33m: &#27;\[36m{THOUSANDS}" event="infoCredits"/>
+		
+		<!-- quickstats -->
+		<Rule expr="{LD}&#27;\[30;47m">
+			<JumpState name="QUICK_STATS"/>
+		</Rule>
+		
+		<!-- movement -->
+		<Rule expr="{LD}&#27;\[3[35]m(Auto )?Warping to [Ss]ector &#27;\[1(;33)?m{SECTOR}" event="warpTarget"/>
+		<Rule expr="{LD}&#27;\[35mTo which Sector \? {NUMERIC_INPUT}" event="mkeyWarpTarget"/>
+		<Rule expr="{LD}&#27;\[32mSector &#27;\[1;33m{SECTOR} &#27;\[0;32mis &#27;\[1;33m{NN_INTEGER}" event="transWarpTarget"/>
+		<Rule expr="{LD}&#27;\[1;36m-&#27;\[33m=&#27;\[36m-&#27;\[33m=&#27;\[36m-&#27;\[33m=&#27;\[36m- &#27;\[31mTransWarp" event="transWarpEngaged"/>
+		<Rule expr="{LD}(&#27;\[32m)?\*\*\* (&#27;\[1;5;31m)?Error(&#27;\[0m&#27;\[32m)? - No route within {NN_INTEGER} warps from sector (&#27;\[1;33m)?{SECTOR}(&#27;\[0;32m)? to sector (&#27;\[1;33m)?{SECTOR}" event="noRoutePrompt"/>
+		<Rule expr="{LD}&#27;\[1;36mDo you really want to warp there\? \(&#27;\[33mY/N&#27;\[36m\) N" event="cancelWarp"/>
+		<Rule expr="{LD}&#27;\[32mTrans(porter|Warp Drive) shutting down\." event="cancelTransWarp"/>
+		<Rule expr="{LD}&#27;\[32m(You|This planet) do(es)? not have enough &#27;\[1;33mFuel" event="cancelTransWarp"/>
+		<Rule expr="{LD}&#27;\[32mAn Interdictor" event="interdicted"/>		
+		
+		<!-- status adjustment messages -->
+		<Rule expr="{LD}&#27;\[33mYou have &#27;\[1m{NN_INTEGER} &#27;\[0;33mturns this Stardate\." event="loginTurns"/>
+		
+		
+
+		<!-- transporting to ship -->
+		<!-- transport successful -->
+		<!-- you trade ships -->
+		<!-- corpmate trades ships -->
+		<!-- you get blown up - names your escape pod type -->
+		<!-- REMEMBER: changed ship event on all these -->
+		
+	</RuleGroup>
+
+</LexerSpec>
